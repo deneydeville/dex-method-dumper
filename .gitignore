@@ -1,0 +1,12 @@
+
+dex-method-dumper/.idea/*.*
+
+dex-method-dumper/.idea/copyright/*.*
+
+dex-method-dumper/.idea/libraries/*.*
+
+dex-method-dumper/lib/kotlin*.*
+
+dex-method-dumper/out/production/dex-method-dumper/com/google/classyshark/silverghost/translator/dex/DexlibAdapter.class
+
+*.class
