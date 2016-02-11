@@ -16,38 +16,26 @@
 
 package com.google.classyshark.silverghost.translator.dex
 
-import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.FileWriter
-import java.io.IOException
-import java.io.InputStream
+import org.objectweb.asm.Type
+import org.ow2.asmdex.*
+import java.io.*
 import java.lang.reflect.Modifier
-import java.util.ArrayList
+import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import org.objectweb.asm.Type
-import org.ow2.asmdex.ApplicationReader
-import org.ow2.asmdex.ApplicationVisitor
-import org.ow2.asmdex.ClassVisitor
-import org.ow2.asmdex.MethodVisitor
-import org.ow2.asmdex.Opcodes
 
 /**
-
  */
 object MethodDumper {
 
     fun dumpMethods(archiveFile: File): List<String> {
         val result = ArrayList<String>()
+        val zipFile = ZipInputStream(FileInputStream(archiveFile))
 
-        try {
-            val zipFile = ZipInputStream(FileInputStream(
-                    archiveFile))
-
+        zipFile.use {
             var zipEntry: ZipEntry?
-
             var dexIndex = 0
+
             while (true) {
                 zipEntry = zipFile.nextEntry
 
@@ -80,21 +68,18 @@ object MethodDumper {
                 }
             }
             zipFile.close()
-
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
 
-        return result
+        return result;
     }
 
     @Throws(IOException::class)
     private fun fillAnalysis(dexIndex: Int, file: File): List<String> {
         val result = ArrayList<String>()
 
-        val mmm = FileInputStream(file)
+        val fis = FileInputStream(file)
         val av = ApkInspectVisitor(result)
-        val ar = ApplicationReader(Opcodes.ASM4, mmm)
+        val ar = ApplicationReader(Opcodes.ASM4, fis)
         ar.accept(av, 0)
 
         return result
@@ -110,7 +95,6 @@ object MethodDumper {
         } catch (ioe: IOException) {
 
         }
-
     }
 
     private class ApkInspectVisitor(private val methodsList: MutableList<String>) : ApplicationVisitor(Opcodes.ASM4) {
@@ -131,9 +115,7 @@ object MethodDumper {
                     // dex format RXYZ
                     val builder = StringBuilder()
                     builder.append(Modifier.toString(access))
-
                     builder.append(" " + ApkInspectVisitor.getDecName(popReturn(desc)))
-
                     builder.append(" " + name)
 
                     // using java class convert + types from ASM
