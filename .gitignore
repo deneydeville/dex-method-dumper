@@ -10,3 +10,7 @@ dex-method-dumper/lib/kotlin*.*
 dex-method-dumper/out/production/dex-method-dumper/com/google/classyshark/silverghost/translator/dex/DexlibAdapter.class
 
 *.class
+
+dex-method-dumper/src/com/google/classyshark/silverghost/translator/dex/Sequences.kt
+
+dex-method-dumper/out/production/dex-method-dumper/META-INF/dex-method-dumper.kotlin_module

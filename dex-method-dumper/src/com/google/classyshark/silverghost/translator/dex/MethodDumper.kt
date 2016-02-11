@@ -51,7 +51,6 @@ class MethodDumper {
 
             return result;
         }
-
     }
 
     @Throws(IOException::class)
@@ -64,14 +63,17 @@ class MethodDumper {
     }
 
     private class ApkInspectVisitor(private val methodsList: MutableList<String>) : ApplicationVisitor(Opcodes.ASM4) {
-        override fun visitClass(access: Int, name: String, signature: Array<String>, superName: String, interfaces: Array<String>): ClassVisitor {
+        override fun visitClass(access: Int, name: String, signature: Array<String?>?,
+                                superName: String, interfaces: Array<String?>?): ClassVisitor {
             return object : ClassVisitor(Opcodes.ASM4) {
 
-                override fun visit(version: Int, access: Int, name: String, signature: Array<String>, superName: String, interfaces: Array<String>) {
+                override fun visit(version: Int, access: Int, name: String, signature: Array<String?>?,
+                                   superName: String, interfaces: Array<String?>?) {
                     super.visit(version, access, name, signature, superName, interfaces)
                 }
 
-                override fun visitMethod(access: Int, name: String, desc: String, signature: Array<String>, exceptions: Array<String>): MethodVisitor {
+                override fun visitMethod(access: Int, name: String, desc: String,
+                                         signature: Array<String?>?, exceptions: Array<String?>?): MethodVisitor? {
                     // class format (XYZ)R
                     // dex format RXYZ
                     val builder = StringBuilder()
@@ -118,13 +120,16 @@ class MethodDumper {
 
         private fun nextTypePosition(desc: String, startPos: Int): Int {
             var pos = startPos
-            while (desc[pos] == '[') { pos++ }
-            if (desc[pos] == 'L') { pos = desc.indexOf(';', pos) }
+            while (desc[pos] == '[') {
+                pos++
+            }
+            if (desc[pos] == 'L') {
+                pos = desc.indexOf(';', pos)
+            }
             pos++
             return pos
         }
     }
-
 
     // TODO: move to common utilities
     fun ZipInputStream.forEachBlock(blockSize: Int = 1024, func: (ByteArray, Int) -> Unit) {
