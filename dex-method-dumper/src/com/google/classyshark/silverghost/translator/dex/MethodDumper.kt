@@ -20,106 +20,67 @@ import org.objectweb.asm.Type
 import org.ow2.asmdex.*
 import java.io.*
 import java.lang.reflect.Modifier
-import java.util.*
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
-/**
- */
-object MethodDumper {
+class MethodDumper {
+    companion object {
+        @JvmStatic fun main(args: Array<String>) {
+            println(MethodDumper().dumpMethods(File("/Users/bfarber/Desktop/Scenarios/4 APKs/com.android.chrome-52311111.apk")))
+        }
+    }
 
     fun dumpMethods(archiveFile: File): List<String> {
-        val result = ArrayList<String>()
-        val zipFile = ZipInputStream(FileInputStream(archiveFile))
+        val result = arrayListOf<String>()
+        val zipFile = ZipInputStream(archiveFile.inputStream())
 
         zipFile.use {
-            var zipEntry: ZipEntry?
             var dexIndex = 0
 
-            while (true) {
-                zipEntry = zipFile.nextEntry
+            generateSequence { zipFile.nextEntry }.filter { it.name.endsWith(".dex") }.forEach { zipEntry ->
+                val tempFile = File.createTempFile("DUMPER_METHODS_classes${dexIndex}", "dex").apply { deleteOnExit() }
 
-                if (zipEntry == null) {
-                    break
-                }
-
-                if (zipEntry.name.endsWith(".dex")) {
-                    val file = File.createTempFile("DUMPER_METHODS_classes" + dexIndex, "dex")
-                    file.deleteOnExit()
-
-                    val fos = FileOutputStream(file)
-                    val bytes = ByteArray(1024)
-                    var length: Int
-
-                    length = zipFile.read(bytes)
-
-                    while (length >= 0) {
-                        fos.write(bytes, 0, length)
-                        length = zipFile.read(bytes)
+                tempFile.outputStream().use { tempOut ->
+                    zipFile.forEachBlock { bytes, length ->
+                        tempOut.write(bytes, 0, length)
                     }
-
-                    fos.close()
-                    val methodsList = fillAnalysis(dexIndex, file)
-                    result.addAll(methodsList)
-
-                    dexIndex++
-                } else {
-
                 }
+
+                result.addAll(fillAnalysis(dexIndex, tempFile.inputStream()))
+                dexIndex++
             }
-            zipFile.close()
+
+            return result;
         }
 
-        return result;
     }
 
     @Throws(IOException::class)
-    private fun fillAnalysis(dexIndex: Int, file: File): List<String> {
-        val result = ArrayList<String>()
-
-        val fis = FileInputStream(file)
-        val av = ApkInspectVisitor(result)
+    private fun fillAnalysis(dexIndex: Int, fis: InputStream): List<String> {
+        val results = arrayListOf<String>()
+        val av = ApkInspectVisitor(results)
         val ar = ApplicationReader(Opcodes.ASM4, fis)
         ar.accept(av, 0)
-
-        return result
-    }
-
-    fun writeAllMethods(file: File, allStrings: List<String>) {
-        try {
-            val writer = FileWriter(file)
-            for (str in allStrings) {
-                writer.write(str)
-            }
-            writer.close()
-        } catch (ioe: IOException) {
-
-        }
+        return results
     }
 
     private class ApkInspectVisitor(private val methodsList: MutableList<String>) : ApplicationVisitor(Opcodes.ASM4) {
-
-        override fun visitClass(access: Int, name: String, signature: Array<String?>?,
-                                superName: String, interfaces: Array<String?>?): ClassVisitor {
+        override fun visitClass(access: Int, name: String, signature: Array<String>, superName: String, interfaces: Array<String>): ClassVisitor {
             return object : ClassVisitor(Opcodes.ASM4) {
 
-                override fun visit(version: Int, access: Int, name: String, signature: Array<String?>?,
-                                   superName: String, interfaces: Array<String?>?) {
+                override fun visit(version: Int, access: Int, name: String, signature: Array<String>, superName: String, interfaces: Array<String>) {
                     super.visit(version, access, name, signature, superName, interfaces)
                 }
 
-                override fun visitMethod(access: Int, name: String, desc: String,
-                                         signature: Array<String?>?, exceptions: Array<String?>?): MethodVisitor? {
-
+                override fun visitMethod(access: Int, name: String, desc: String, signature: Array<String>, exceptions: Array<String>): MethodVisitor {
                     // class format (XYZ)R
                     // dex format RXYZ
                     val builder = StringBuilder()
                     builder.append(Modifier.toString(access))
-                    builder.append(" " + ApkInspectVisitor.getDecName(popReturn(desc)))
+                    builder.append(" " + getDecName(popReturn(desc)))
                     builder.append(" " + name)
 
                     // using java class convert + types from ASM
-                    val parameterTypes = Type.getArgumentTypes("(" + popType(desc) + ")")
+                    val parameterTypes = Type.getArgumentTypes("(${popType(desc)})")
 
                     builder.append("(")
 
@@ -127,7 +88,7 @@ object MethodDumper {
                     for (pType in parameterTypes) {
                         builder.append(prefix)
                         prefix = ","
-                        builder.append(ApkInspectVisitor.getDecName(pType.toString()))
+                        builder.append(getDecName(pType.toString()))
                     }
 
                     builder.append(")\n")
@@ -138,44 +99,40 @@ object MethodDumper {
             }
         }
 
-        companion object {
-
-            internal fun getDecName(dexType: String): String {
-                if (dexType.startsWith("[")) {
-                    return getDecName(dexType.substring(1)) + "[]"
-                }
-                if (dexType.startsWith("L")) {
-                    val name = dexType.substring(1, dexType.length - 1)
-
-                    return name.replace('/', '.')
-                }
-
-                if (DexlibAdapter.primitiveTypes.containsKey(dexType)) {
-                    return DexlibAdapter.primitiveTypes[dexType]!!
-                } else {
-                    return "void"
-                }
+        private fun getDecName(dexType: String): String {
+            return when {
+                dexType.startsWith("[") -> getDecName(dexType.substring(1)) + "[]"
+                dexType.startsWith("L") -> dexType.substring(1, dexType.length - 1).replace('/', '.')
+                DexlibAdapter.primitiveTypes.containsKey(dexType) -> DexlibAdapter.primitiveTypes[dexType]!!
+                else -> "void"
             }
+        }
 
-            internal fun popType(desc: String): String {
-                return desc.substring(nextTypePosition(desc, 0))
-            }
+        private fun popType(desc: String): String {
+            return desc.substring(nextTypePosition(desc, 0))
+        }
 
-            internal fun popReturn(desc: String): String {
-                return desc.substring(0, desc.indexOf(popType(desc)))
-            }
+        private fun popReturn(desc: String): String {
+            return desc.substring(0, desc.indexOf(popType(desc)))
+        }
 
-            internal fun nextTypePosition(desc: String, pos: Int): Int {
-                var pos = pos
-                while (desc[pos] == '[') pos++
-                if (desc[pos] == 'L') pos = desc.indexOf(';', pos)
-                pos++
-                return pos
-            }
+        private fun nextTypePosition(desc: String, startPos: Int): Int {
+            var pos = startPos
+            while (desc[pos] == '[') { pos++ }
+            if (desc[pos] == 'L') { pos = desc.indexOf(';', pos) }
+            pos++
+            return pos
         }
     }
 
-    @JvmStatic fun main(args: Array<String>) {
-        println(MethodDumper.dumpMethods(File("/Users/bfarber/Desktop/Scenarios/4 APKs/com.android.chrome-52311111.apk")))
+
+    // TODO: move to common utilities
+    fun ZipInputStream.forEachBlock(blockSize: Int = 1024, func: (ByteArray, Int) -> Unit) {
+        val bytes = ByteArray(blockSize)
+        generateSequence<Pair<ByteArray, Int>> {
+            val readLen = this.read(bytes)
+            if (readLen < 0) null
+            else Pair(bytes, readLen)
+        }.forEach { func(it.first, it.second) }
     }
 }
