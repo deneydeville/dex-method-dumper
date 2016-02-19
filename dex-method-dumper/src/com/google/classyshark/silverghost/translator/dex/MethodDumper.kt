@@ -134,7 +134,7 @@ class MethodDumper {
     // TODO: move to common utilities
     fun ZipInputStream.forEachBlock(blockSize: Int = 1024, func: (ByteArray, Int) -> Unit) {
         val bytes = ByteArray(blockSize)
-        generateSequence<Pair<ByteArray, Int>> {
+        generateSequence {
             val readLen = this.read(bytes)
             if (readLen < 0) null
             else Pair(bytes, readLen)
